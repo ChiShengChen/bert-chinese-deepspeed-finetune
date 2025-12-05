@@ -1,0 +1,158 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+conda-meta/
+.conda/
+
+# PyTorch
+*.pth
+*.pt
+*.ckpt
+*.pkl
+
+# Model files and checkpoints
+checkpoints/
+*.bin
+*.safetensors
+*.h5
+*.hdf5
+my_bert_finetuned_model_hf_format/
+models/
+saved_models/
+*.model
+
+# DeepSpeed
+deepspeed_logs/
+deepspeed_info/
+.ds_store
+zero_to_fp32.py
+
+# Hugging Face
+.cache/
+huggingface/
+transformers_cache/
+*.lock
+.hf/
+
+# Datasets
+datasets/
+data/
+*.csv
+*.tsv
+*.json
+!requirements.txt
+test_qa_data.json
+
+# Training outputs
+validation_loss_curve.png
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.pdf
+logs/
+runs/
+tensorboard_logs/
+wandb/
+mlruns/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+!*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.out
+*.err
+tmp/
+temp/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+outputs/
+results/
+experiments/
+*.json
+!package.json
+!tsconfig.json
+!requirements.txt
+
+# Large files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Backup files
+*.bak
+*.backup
+*~
+
