@@ -605,30 +605,83 @@ class EvalLLm:
 
     def evaluation(self, question:str):
         """
-        對 prompt 進行評估，回傳模型輸出
+        使用 Qwen 模型評估兩個回答的質量
+        
+        Args:
+            question: 問題文本
+        
+        Returns:
+            list: 評估分數列表（如果成功解析）
         """
-        sys_prompt = EVAL_PROMPT if self.ground_truth else SYS_PROMPT
+        # 構建評估 prompt
+        if self.ground_truth:
+            # 有標準答案時，使用完整的評估 prompt
+            eval_prompt = EVAL_PROMPT.format(
+                question=question,
+                gold_answer=self.ground_truth,
+                baseline_output=str(self.model_a_resp) if self.model_a_resp else "N/A",
+                finetuned_output=str(self.model_b_resp) if self.model_b_resp else "N/A"
+            )
+        else:
+            # 沒有標準答案時，使用簡化 prompt
+            eval_prompt = f"""
+[Question]: {question}
+[Model A Answer]: {str(self.model_a_resp) if self.model_a_resp else "N/A"}
+[Model B Answer]: {str(self.model_b_resp) if self.model_b_resp else "N/A"}
+
+Act as an impartial judge.
+Evaluate both Model A and Model B's answers with respect to correctness, relevance, and completeness.
+Give a score from 1-10 for each, and declare which is better.
+Format your response as: "Model A: X/10, Model B: Y/10, Better: [A/B]"
+"""
+        
+        # 構建對話消息
         messages = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user", "content": question}
+            {"role": "system", "content": "You are an impartial judge evaluating model answers."},
+            {"role": "user", "content": eval_prompt}
         ]
+        
+        # 應用聊天模板
         text = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True
         )
+        
+        # 編碼輸入
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
-        #  編碼輸入
-        generated_ids =  self.model.generate(
-            **model_inputs,
-            max_new_tokens=512
-        )
+        
+        # 生成評估結果
+        with torch.no_grad():
+            generated_ids = self.model.generate(
+                **model_inputs,
+                max_new_tokens=512,
+                temperature=0.7,
+                do_sample=True
+            )
+        
+        # 提取生成的文本（去除輸入部分）
         generated_ids = [
             output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
         ]
-        # 生成回答
+        
+        # 解碼回答
         response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         print("模型回答：\n", response)
+        
+        # 嘗試從回答中提取分數（簡單的正則表達式解析）
+        import re
+        scores = []
+        # 嘗試提取分數，例如 "Model A: 8/10, Model B: 9/10"
+        score_pattern = r'Model [AB]:\s*(\d+)/10'
+        found_scores = re.findall(score_pattern, response)
+        if len(found_scores) >= 2:
+            scores = [int(s) for s in found_scores[:2]]
+        else:
+            # 如果無法解析，返回空列表
+            print("⚠️ 無法從回答中解析分數，請手動查看評估結果")
+        
+        return scores
 
     def judgement(self, scores:list, full_score:int=10):
         """
