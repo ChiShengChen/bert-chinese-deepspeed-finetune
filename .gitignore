@@ -68,13 +68,13 @@ datasets/
 data/
 *.csv
 *.tsv
-*.json
+# *.json
 !requirements.txt
 test_qa_data.json
 
 # Training outputs
-validation_loss_curve.png
-*.png
+# validation_loss_curve.png
+# *.png
 *.jpg
 *.jpeg
 *.gif
