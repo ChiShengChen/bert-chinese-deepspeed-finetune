@@ -672,33 +672,134 @@ Format your response as: "Model A: X/10, Model B: Y/10, Better: [A/B]"
         response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         print("模型回答：\n", response)
         
-        # 嘗試從回答中提取分數（簡單的正則表達式解析）
+        # 嘗試從回答中提取分數（支持多種格式）
         import re
         scores = []
-        # 嘗試提取分數，例如 "Model A: 8/10, Model B: 9/10"
-        score_pattern = r'Model [AB]:\s*(\d+)/10'
-        found_scores = re.findall(score_pattern, response)
-        if len(found_scores) >= 2:
-            scores = [int(s) for s in found_scores[:2]]
+        
+        # 方法 1: 標準格式 "Model A: X/10, Model B: Y/10"
+        score_pattern1 = r'Model [AB]:\s*(\d+)/10'
+        found_scores1 = re.findall(score_pattern1, response, re.IGNORECASE)
+        
+        # 方法 2: Markdown 格式 "**Score: X**" 在 Model A/B 部分
+        # 先找到 Model A 和 Model B 的部分
+        model_a_section = re.search(r'Model A[^:]*:.*?(?=Model B|$)', response, re.IGNORECASE | re.DOTALL)
+        model_b_section = re.search(r'Model B[^:]*:.*?(?=Model [AC]|$)', response, re.IGNORECASE | re.DOTALL)
+        
+        scores_a = []
+        scores_b = []
+        
+        if model_a_section:
+            # 在 Model A 部分查找分數
+            a_text = model_a_section.group(0)
+            # 匹配 "Score: X" 或 "**Score: X**" 或 "Score X/10"
+            a_patterns = [
+                r'\*\*Score:\s*(\d+)\*\*',
+                r'Score:\s*(\d+)',
+                r'Score\s+(\d+)/10',
+                r'(\d+)/10.*?Model A',
+                r'Model A.*?(\d+)/10'
+            ]
+            for pattern in a_patterns:
+                matches = re.findall(pattern, a_text, re.IGNORECASE)
+                if matches:
+                    scores_a.append(int(matches[0]))
+                    break
+        
+        if model_b_section:
+            # 在 Model B 部分查找分數
+            b_text = model_b_section.group(0)
+            b_patterns = [
+                r'\*\*Score:\s*(\d+)\*\*',
+                r'Score:\s*(\d+)',
+                r'Score\s+(\d+)/10',
+                r'(\d+)/10.*?Model B',
+                r'Model B.*?(\d+)/10'
+            ]
+            for pattern in b_patterns:
+                matches = re.findall(pattern, b_text, re.IGNORECASE)
+                if matches:
+                    scores_b.append(int(matches[0]))
+                    break
+        
+        # 方法 3: 直接查找所有 "Score: X" 格式（按順序）
+        all_scores = re.findall(r'(?:Score|分數)[:\s]*(\d+)(?:/10)?', response, re.IGNORECASE)
+        
+        # 優先使用標準格式
+        if len(found_scores1) >= 2:
+            scores = [int(s) for s in found_scores1[:2]]
+            print(f"✅ 使用標準格式解析分數: Model A = {scores[0]}/10, Model B = {scores[1]}/10")
+        # 其次使用 Model A/B 部分的分數
+        elif len(scores_a) > 0 and len(scores_b) > 0:
+            scores = [scores_a[0], scores_b[0]]
+            print(f"✅ 使用 Model A/B 部分解析分數: Model A = {scores[0]}/10, Model B = {scores[1]}/10")
+        # 最後嘗試按順序提取所有分數
+        elif len(all_scores) >= 2:
+            scores = [int(s) for s in all_scores[:2]]
+            print(f"✅ 使用順序解析分數: Model A = {scores[0]}/10, Model B = {scores[1]}/10")
+        # 如果只有一個分數，嘗試推斷
+        elif len(all_scores) == 1:
+            # 檢查文本中是否有明確的 Model A/B 標記
+            if 'Model A' in response[:len(response)//2] and 'Model B' in response[len(response)//2:]:
+                # 假設第一個分數是 Model A，但需要更多信息
+                print(f"⚠️ 只找到一個分數: {all_scores[0]}，無法確定 Model A/B 的對應關係")
+            else:
+                print(f"⚠️ 只找到一個分數: {all_scores[0]}，無法解析兩個模型的分數")
         else:
             # 如果無法解析，返回空列表
             print("⚠️ 無法從回答中解析分數，請手動查看評估結果")
+            print("💡 提示：Qwen 的回答格式可能不符合預期，但評估內容仍然有效")
         
         return scores
 
     def judgement(self, scores:list, full_score:int=10):
         """
         根據分數列表計算準確率
+        
+        Args:
+            scores: 分數列表，通常是單個問題的兩個模型分數 [model_a_score, model_b_score]
+            full_score: 滿分（預設 10）
+        
+        Returns:
+            dict: 包含評估結果的字典
         """
         if not scores:
-            print("⚠️ scores 為空，無法計算")
-            return 0.0
-        accuracy = 0
-        correct = sum(1 for s in scores if s == full_score)
-        accuracy = correct / len(scores) * 100
-        avg_score = sum(scores) / len(scores)
-        print(f"Accuracy: {accuracy:.2f}% | 平均信心分數: {avg_score:.2f}/{full_score}")
-        return {"accuracy": accuracy, "avg_score": avg_score}
+            print("⚠️ scores 為空，無法計算統計信息")
+            print("💡 這可能是因為 Qwen 的評估格式無法自動解析，但評估內容仍然有效")
+            return {"accuracy": 0.0, "avg_score": 0.0, "total_evaluations": 0}
+        
+        # 如果 scores 是單個問題的兩個分數 [model_a, model_b]
+        if len(scores) == 2 and all(isinstance(s, (int, float)) and 0 <= s <= full_score for s in scores):
+            model_a_score, model_b_score = int(scores[0]), int(scores[1])
+            avg_score = (model_a_score + model_b_score) / 2
+            better_model = "B" if model_b_score > model_a_score else "A" if model_a_score > model_b_score else "Tie"
+            print(f"📊 評估結果:")
+            print(f"   Model A: {model_a_score}/{full_score}")
+            print(f"   Model B: {model_b_score}/{full_score}")
+            print(f"   平均分數: {avg_score:.2f}/{full_score}")
+            print(f"   更好的模型: Model {better_model}")
+            return {
+                "model_a_score": model_a_score,
+                "model_b_score": model_b_score,
+                "avg_score": avg_score,
+                "better_model": better_model,
+                "total_evaluations": 1
+            }
+        # 如果 scores 是多個問題的分數列表（批量評估）
+        else:
+            total = len(scores)
+            correct = sum(1 for s in scores if s == full_score)
+            accuracy = correct / total * 100 if total > 0 else 0.0
+            avg_score = sum(scores) / total if total > 0 else 0.0
+            print(f"📊 批量評估結果:")
+            print(f"   總評估數: {total}")
+            print(f"   準確率 (滿分): {accuracy:.2f}% ({correct}/{total})")
+            print(f"   平均分數: {avg_score:.2f}/{full_score}")
+            return {
+                "accuracy": accuracy,
+                "avg_score": avg_score,
+                "total_evaluations": total,
+                "correct_count": correct
+            }
 
 test_data[0]
 
