@@ -11,10 +11,12 @@
 - 🚀 **DeepSpeed 支援**：使用 DeepSpeed 框架進行高效訓練，支援 ZeRO 優化
 - 🔄 **自動降級**：DeepSpeed 不可用時自動降級到標準 PyTorch 訓練
 - 🎯 **多領域訓練**：涵蓋 40+ 個中文專業領域知識
-- 💾 **檢查點管理**：支援訓練檢查點的保存和載入
+- 💾 **模型自動保存**：訓練完成後自動保存模型到 `my_bert_finetuned_model_hf_format/`，可直接用於推理
+- 📦 **檢查點管理**：支援訓練檢查點的保存和載入
 - 📊 **視覺化**：自動生成訓練損失曲線圖
 - 🔧 **設備自適應**：自動檢測並使用 GPU/CPU
 - 📝 **完整評估**：包含模型評估和對比功能
+- ⚠️ **重要說明**：BERT 是 Masked Language Model，不適合用於生成式聊天，適合填空和選擇題問答任務
 
 ## 🛠️ 環境要求
 
@@ -111,11 +113,38 @@ deepspeed --num_gpus=4 fine_tuning_llm_ipynb.py
 deepspeed --deepspeed_config ds_config.json fine_tuning_llm_ipynb.py
 ```
 
+### 使用微調後的模型進行推理
+
+訓練完成後，可以使用 `inference.py` 腳本進行推理：
+
+```bash
+# 互動模式（推薦）
+python inference.py
+
+# 單次推理
+python inference.py --prompt "今天天氣[MASK]"
+
+# 指定模型路徑
+python inference.py --model_path ./my_bert_finetuned_model_hf_format
+
+# 強制使用 CPU
+python inference.py --cpu
+
+# 自訂返回結果數量
+python inference.py --prompt "問題文本" --top_k 10
+```
+
+**互動模式功能：**
+- 輸入問題文本，自動預測 [MASK] 位置的詞彙
+- 輸入 `qa` 進入問答模式，可以比較多個選項
+- 輸入 `quit` 或 `exit` 退出
+
 ## 📁 專案結構
 
 ```
 LLM_example/
 ├── fine_tuning_llm_ipynb.py    # 主訓練腳本
+├── inference.py                 # 模型推理腳本（用於載入模型進行問答）
 ├── checkpoints/                 # 訓練檢查點目錄（自動建立）
 ├── my_bert_finetuned_model_hf_format/  # 微調後的模型（訓練後生成）
 ├── test_qa_data.json            # 測試資料 JSON 檔案（自動生成）
@@ -178,7 +207,23 @@ config_params = {
 訓練過程中保存的模型檢查點，可用於恢復訓練。
 
 ### 2. 微調模型 (`my_bert_finetuned_model_hf_format/`)
-訓練完成後保存的模型和 tokenizer，可直接用於推理。
+**訓練完成後自動保存的模型和 tokenizer，可直接用於推理。**
+
+**模型保存功能：**
+- ✅ 模型會自動保存到 `my_bert_finetuned_model_hf_format/` 目錄
+- ✅ 包含完整的模型權重和 tokenizer 配置
+- ✅ 使用 Hugging Face 格式，可直接用 `from_pretrained()` 載入
+- ✅ 支援 DeepSpeed 和標準 PyTorch 兩種模式保存
+- ✅ 程式碼中已包含載入和推理函數
+
+**⚠️ 重要限制說明：**
+- **BERT 是 Masked Language Model (MLM)**，不是生成式模型
+- **不適合**用於開放式對話聊天（如 ChatGPT 那樣的連續對話）
+- **適合**用於：
+  - 填空任務：預測文本中 [MASK] 位置的詞彙
+  - 選擇題問答：比較多個選項，找出最可能的答案
+  - 文本理解和分類任務
+- 如需真正的聊天功能，建議使用 **GPT 類生成式模型**（如 GPT-2、ChatGLM、Qwen 等）
 
 ### 3. 測試資料 (`test_qa_data.json`)
 從測試集中提取的結構化問答資料。
@@ -196,12 +241,20 @@ config_params = {
 - DeepSpeed 初始化（帶降級機制）
 - 訓練循環（支援檢查點保存/載入）
 - 驗證評估
+- **自動保存微調後的模型**到 `my_bert_finetuned_model_hf_format/` 目錄
 
-### 3. 模型推理
-- `chat_with_tuning_llm()`: 使用微調模型進行推理
+### 3. 模型保存與載入
+- **模型保存**：訓練完成後自動保存模型和 tokenizer（第 403-442 行）
+- **模型載入**：程式碼中包含載入函數（第 455-515 行）
+- **推理功能**：提供 `chat_with_tuning_llm()` 函數進行推理
+- **獨立推理腳本**：`inference.py` 提供更完整的推理功能
+
+### 4. 模型推理
+- `chat_with_tuning_llm()`: 使用微調模型進行推理（填空任務）
 - `general_chat()`: 使用原始模型進行推理
+- `inference.py`: 獨立的推理腳本，支援互動模式和問答模式
 
-### 4. 模型評估
+### 5. 模型評估
 - `EvalLLm`: 使用 LLM 評估模型回答品質
 - `exe_chat()`: 在測試集上執行完整評估流程
 
@@ -252,16 +305,215 @@ A:
    - 反向傳播
    - 參數更新
 6. **驗證評估**: 每個 epoch 結束後在驗證集上評估
-7. **模型保存**: 保存微調後的模型和 tokenizer
+7. **模型保存**: **自動保存微調後的模型和 tokenizer 到 `my_bert_finetuned_model_hf_format/`**
 8. **結果視覺化**: 生成損失曲線圖
+
+## 💾 模型保存與使用
+
+### 模型保存功能
+
+**✅ 自動保存：**
+- 訓練完成後，模型會自動保存到 `my_bert_finetuned_model_hf_format/` 目錄
+- 保存格式為 Hugging Face Transformers 標準格式
+- 包含完整的模型權重、配置檔案和 tokenizer
+
+**✅ 保存內容：**
+- `config.json`: 模型配置
+- `pytorch_model.bin` 或 `model.safetensors`: 模型權重
+- `tokenizer_config.json`: Tokenizer 配置
+- `vocab.txt`: 詞彙表
+- 其他必要的配置檔案
+
+**✅ 載入方式：**
+```python
+from transformers import AutoTokenizer, AutoModelForMaskedLM
+
+# 載入保存的模型
+model_path = "./my_bert_finetuned_model_hf_format"
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+model = AutoModelForMaskedLM.from_pretrained(model_path)
+```
+
+**✅ 程式碼中的載入和推理函數：**
+- 程式碼中已包含載入和推理函數（第 455-515 行）
+- 可以使用 `chat_with_tuning_llm()` 函數進行推理
+- 建議使用 `inference.py` 腳本進行更完整的推理功能
+
+### ⚠️ BERT 模型限制說明
+
+**重要：BERT 不適合用於生成式聊天**
+
+#### 為什麼 BERT Base Model 不適合 Chat？
+
+**1. 架構設計差異：**
+
+BERT 是 **雙向編碼器（Bidirectional Encoder）**：
+- 使用 **Transformer Encoder** 架構
+- 在訓練時可以同時看到整個序列的上下文（前後文）
+- 設計目標是**理解**文本的語義，而非**生成**文本
+
+生成式模型（如 GPT）是 **單向解碼器（Unidirectional Decoder）**：
+- 使用 **Transformer Decoder** 架構
+- 只能看到當前位置之前的上下文（因果遮罩）
+- 設計目標是**自回歸生成**，逐個生成下一個 token
+
+**2. 訓練目標不同：**
+
+BERT 的訓練任務：
+- **Masked Language Modeling (MLM)**：預測被遮罩的單個詞彙
+- **Next Sentence Prediction (NSP)**：判斷兩個句子是否連續
+- 目標是學習**雙向語義表示**
+
+生成式模型的訓練任務：
+- **Causal Language Modeling (CLM)**：根據前面的詞彙預測下一個詞彙
+- 目標是學習**自回歸生成**能力
+
+**3. 技術限制：**
+
+BERT 的限制：
+- ❌ **無法自回歸生成**：沒有解碼器的自注意力機制
+- ❌ **無法處理序列生成**：只能預測單個 [MASK] 位置
+- ❌ **沒有生成循環**：無法逐個生成 token 形成完整回答
+- ❌ **雙向注意力不適合生成**：生成時不應該看到"未來"的信息
+
+生成式模型的優勢：
+- ✅ **自回歸生成**：可以逐個生成 token
+- ✅ **序列生成能力**：可以生成任意長度的文本
+- ✅ **因果遮罩**：確保生成時只使用已生成的內容
+
+**4. 實際應用差異：**
+
+BERT 的應用場景：
+```
+輸入: "今天天氣很[MASK]"
+輸出: ["好", "熱", "冷", ...]  # 只能預測單個詞彙
+```
+
+生成式模型的應用場景：
+```
+輸入: "今天天氣很好，"
+輸出: "今天天氣很好，適合出門散步。"  # 可以生成完整句子
+```
+
+**總結：**
+- BERT 是**理解型模型**，專注於文本理解和語義表示
+- GPT 類模型是**生成型模型**，專注於文本生成和對話
+- 兩者的架構、訓練目標和應用場景完全不同
+- 因此 BERT 不適合用於需要生成連續文本的聊天任務
+
+**BERT 適合的任務：**
+- ✅ 填空任務：`"今天天氣很[MASK]"` → 預測 "好"、"熱" 等
+- ✅ 選擇題：比較多個選項，找出最可能的答案
+- ✅ 文本分類：判斷文本類別
+- ✅ 問答理解：理解問題和文本的語義關係
+
+**不適合的任務：**
+- ❌ 開放式對話：無法生成連續的對話文本
+- ❌ 長文本生成：無法進行自回歸生成
+- ❌ 創意寫作：無法進行自由創作
+- ❌ 聊天機器人：無法像 ChatGPT 那樣進行多輪對話
+
+**如需聊天功能，建議：**
+- 使用 **GPT 類模型**（GPT-2、GPT-3、ChatGLM、Qwen 等）
+- 使用 **Causal Language Model** 進行微調
+- 本專案的 BERT 模型主要用於**問答理解**和**填空任務**
+
+#### 技術對比表
+
+| 特性 | BERT (Encoder) | GPT (Decoder) |
+|------|----------------|----------------|
+| **架構** | Transformer Encoder | Transformer Decoder |
+| **注意力機制** | 雙向（Bidirectional） | 單向（Causal） |
+| **訓練任務** | MLM + NSP | Causal LM |
+| **生成能力** | ❌ 無法生成 | ✅ 可以生成 |
+| **理解能力** | ✅ 優秀 | ✅ 良好 |
+| **適合任務** | 分類、理解、填空 | 生成、對話、創作 |
+| **聊天適用性** | ❌ 不適合 | ✅ 適合 |
+
+#### 深入理解：為什麼 Encoder 架構不適合生成？
+
+**核心問題：雙向注意力 vs 因果遮罩**
+
+1. **BERT 的雙向注意力機制：**
+   ```
+   輸入序列: [CLS] 今天 天氣 很 [MASK] [SEP]
+              ↑     ↑    ↑    ↑   ↑     ↑
+   注意力:    所有位置都可以互相看到
+   ```
+   - 每個 token 可以看到整個序列（包括"未來"的 token）
+   - 這在**理解任務**中很有用，因為可以同時考慮上下文
+   - 但在**生成任務**中會造成問題：生成時不應該知道"未來"的內容
+
+2. **GPT 的因果遮罩：**
+   ```
+   生成過程: "今天" → "天氣" → "很" → "好"
+              ↑       ↑       ↑     ↑
+   注意力:    只能看到已生成的內容（因果遮罩）
+   ```
+   - 每個 token 只能看到它**之前**的 token
+   - 這確保生成過程是**自回歸**的：逐個生成，不依賴未來信息
+   - 這是生成式模型的必要條件
+
+3. **實際影響：**
+   - BERT 無法實現因果遮罩，因為它的設計就是為了雙向理解
+   - 即使強制使用 BERT 生成，也會因為看到"未來"信息而產生不一致的結果
+   - 這就是為什麼需要專門的 Decoder 架構來進行文本生成
 
 ## 🎯 使用場景
 
-- 中文問答系統開發
+- 中文問答系統開發（選擇題、填空題）
 - 多領域知識理解任務
 - 模型微調實驗
 - 對比學習研究
 - 中文 NLP 應用開發
+- 文本填空和補全任務
+- 問答系統的候選答案排序
+
+## 💬 模型推理使用說明
+
+### BERT 模型的適用場景
+
+**✅ 適合：**
+- 填空任務：`"今天天氣很[MASK]"` → 預測 "好"、"熱" 等
+- 選擇題：比較多個選項，找出最可能的答案
+- 文本理解：判斷文本的語義和意圖
+
+**❌ 不適合：**
+- 開放式對話：無法生成連續的對話文本
+- 長文本生成：不是生成式模型
+- 創意寫作：無法進行自由創作
+
+### 推理範例
+
+```python
+# 使用 inference.py 進行推理
+
+# 1. 填空任務
+python inference.py --prompt "人工智慧是[MASK]技術"
+
+# 2. 問答模式（互動模式中輸入 'qa'）
+# 問題: 哪個是最大的行星？
+# 選項: A:地球 B:木星 C:火星 D:水星
+# → 模型會比較選項並給出最可能的答案
+```
+
+### 程式碼中使用
+
+```python
+from inference import load_model, predict_mask, qa_inference
+
+# 載入模型
+model, tokenizer, device = load_model("./my_bert_finetuned_model_hf_format")
+
+# 填空預測
+predictions = predict_mask(model, tokenizer, "今天天氣[MASK]", device, top_k=5)
+print(predictions)  # ['好', '熱', '冷', '晴朗', '陰']
+
+# 問答推理
+options = {"A": "地球", "B": "木星", "C": "火星"}
+results = qa_inference(model, tokenizer, "最大的行星是？", options, device)
+print(results)  # [('B', '木星', 8.5), ('A', '地球', 2.3), ...]
+```
 
 ## ⚠️ 注意事項
 
@@ -269,6 +521,14 @@ A:
 2. **訓練時間**取決於硬體配置，GPU 訓練會顯著加快速度
 3. **儲存空間**：確保有足夠空間儲存模型和檢查點（約 1-2 GB）
 4. **記憶體需求**：建議至少 8GB RAM，GPU 訓練需要 4GB+ 顯存
+5. **BERT 模型限制**：
+   - BERT 是 **Masked Language Model (MLM)**，不是生成式模型
+   - **不適合**用於開放式對話聊天（如 ChatGPT）
+   - **適合**用於：
+     - 填空任務（預測 [MASK] 位置的詞彙）
+     - 選擇題問答（比較選項的可能性）
+     - 文本分類和理解任務
+   - 如需真正的聊天功能，建議使用 **GPT** 類生成式模型
 
 ## 📄 授權許可
 
