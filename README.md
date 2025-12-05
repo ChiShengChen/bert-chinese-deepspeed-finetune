@@ -139,6 +139,197 @@ python inference.py --prompt "問題文本" --top_k 10
 - 輸入 `qa` 進入問答模式，可以比較多個選項
 - 輸入 `quit` 或 `exit` 退出
 
+## 🔍 inference.py 腳本詳細說明
+
+### 腳本用途
+
+`inference.py` 是一個獨立的推理腳本，用於載入訓練好的 BERT 模型並進行問答推理。它提供了兩種使用模式：**互動模式**和**單次推理模式**。
+
+### 核心功能
+
+#### 1. **模型載入** (`load_model`)
+
+**功能：**
+- 從指定路徑載入微調後的模型和 tokenizer
+- 自動檢測並使用 GPU/CPU
+- 將模型設置為評估模式（`model.eval()`）
+
+**行為：**
+```python
+# 自動檢測設備
+device = "cuda" if GPU可用 else "cpu"
+
+# 載入模型
+model = AutoModelForMaskedLM.from_pretrained(model_path)
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+```
+
+#### 2. **填空預測** (`predict_mask`)
+
+**功能：**
+- 預測文本中 [MASK] 位置的詞彙
+- 返回 top-k 個最可能的預測結果
+
+**行為流程：**
+```
+輸入: "今天天氣很[MASK]"
+  ↓
+自動添加 [MASK]（如果沒有）
+  ↓
+Tokenize 輸入文本
+  ↓
+模型推理（獲取 logits）
+  ↓
+提取 [MASK] 位置的 logits
+  ↓
+選擇 top-k 個最高分數的 token
+  ↓
+輸出: ["好", "熱", "冷", "晴朗", "陰"]
+```
+
+**使用範例：**
+```python
+predictions = predict_mask(model, tokenizer, "人工智慧是[MASK]技術", device, top_k=5)
+# 輸出: ["新興", "先進", "現代", "創新", "智能"]
+```
+
+#### 3. **問答推理** (`qa_inference`)
+
+**功能：**
+- 比較多個選項，找出最可能的答案
+- 適用於選擇題問答場景
+
+**行為流程：**
+```
+輸入: 
+  問題: "最大的行星是？"
+  選項: {"A": "地球", "B": "木星", "C": "火星"}
+  ↓
+對每個選項構建 prompt: "問題 [MASK] 選項"
+  ↓
+計算每個選項在 [MASK] 位置的得分
+  ↓
+按分數排序
+  ↓
+輸出: [("B", "木星", 8.5), ("A", "地球", 2.3), ("C", "火星", 1.1)]
+```
+
+**使用範例：**
+```python
+options = {"A": "地球", "B": "木星", "C": "火星"}
+results = qa_inference(model, tokenizer, "最大的行星是？", options, device)
+# 輸出: [("B", "木星", 8.5), ("A", "地球", 2.3), ...]
+```
+
+#### 4. **互動模式** (`interactive_mode`)
+
+**功能：**
+- 提供持續的互動式推理界面
+- 支援兩種模式：填空預測和問答模式
+
+**行為：**
+```
+啟動互動模式
+  ↓
+顯示使用提示
+  ↓
+等待用戶輸入
+  ↓
+判斷輸入類型：
+  - "quit"/"exit" → 退出
+  - "qa" → 進入問答模式
+  - 其他 → 填空預測模式
+  ↓
+執行對應的推理
+  ↓
+顯示結果並繼續等待輸入
+```
+
+**互動模式範例：**
+```
+💬 請輸入問題: 今天天氣很[MASK]
+
+🔮 預測結果（Top 5）:
+  1. 好
+  2. 熱
+  3. 冷
+  4. 晴朗
+  5. 陰
+
+💬 請輸入問題: qa
+❓ 問題: 哪個是最大的行星？
+📝 選項（格式：A:選項A B:選項B C:選項C D:選項D）
+選項: A:地球 B:木星 C:火星 D:水星
+
+🎯 預測結果（按可能性排序）:
+  1. B: 木星 (分數: 8.5234)
+  2. A: 地球 (分數: 2.3456)
+  3. C: 火星 (分數: 1.1234)
+```
+
+### 使用模式
+
+#### 模式 1：互動模式（預設）
+
+```bash
+python inference.py
+```
+
+**特點：**
+- 持續運行，可以多次輸入問題
+- 適合探索和測試模型
+- 支援兩種推理方式（填空和問答）
+
+#### 模式 2：單次推理模式
+
+```bash
+python inference.py --prompt "今天天氣[MASK]"
+```
+
+**特點：**
+- 執行一次推理後退出
+- 適合腳本自動化
+- 可以配合其他工具使用
+
+### 命令行參數
+
+| 參數 | 說明 | 預設值 |
+|------|------|--------|
+| `--model_path` | 模型路徑 | `./my_bert_finetuned_model_hf_format` |
+| `--cpu` | 強制使用 CPU | 自動檢測 |
+| `--prompt` | 單次推理的問題文本 | `None`（互動模式） |
+| `--top_k` | 返回前 k 個結果 | `5` |
+
+### 程式碼結構
+
+```
+inference.py
+├── load_model()          # 載入模型和 tokenizer
+├── predict_mask()        # 填空預測功能
+├── qa_inference()        # 問答推理功能
+├── interactive_mode()    # 互動模式
+└── main()                # 主函數（解析參數、啟動推理）
+```
+
+### 適用場景
+
+**✅ 適合：**
+- 測試微調後的模型效果
+- 進行填空任務推理
+- 選擇題問答系統
+- 模型效果演示
+
+**❌ 不適合：**
+- 開放式對話（BERT 架構限制）
+- 長文本生成
+- 批量處理大量數據（建議使用程式碼 API）
+
+### 與訓練腳本的關係
+
+- **訓練腳本** (`fine_tuning_llm_ipynb.py`)：訓練模型並保存
+- **推理腳本** (`inference.py`)：載入保存的模型進行推理
+- 兩者分離，推理腳本可以獨立使用，無需重新訓練
+
 ## 📁 專案結構
 
 ```
@@ -541,6 +732,323 @@ print(results)  # [('B', '木星', 8.5), ('A', '地球', 2.3), ...]
 ## 📧 聯絡方式
 
 如有問題或建議，請透過 Issue 回饋。
+
+## 📖 完整使用範例
+
+### 範例 1：完整訓練流程
+
+```bash
+# 1. 安裝依賴
+pip install torch transformers datasets deepspeed matplotlib numpy
+
+# 2. 開始訓練（使用 GPU）
+python fine_tuning_llm_ipynb.py
+
+# 訓練過程會顯示：
+# - 資料載入進度
+# - 每個 epoch 的訓練損失
+# - 驗證損失
+# - 模型自動保存到 my_bert_finetuned_model_hf_format/
+
+# 3. 訓練完成後，使用模型進行推理
+python inference.py
+```
+
+### 範例 2：使用 CPU 訓練
+
+```bash
+# 強制使用 CPU 訓練（適合沒有 GPU 的環境）
+python fine_tuning_llm_ipynb.py --cpu
+
+# 訓練時間會較長，但可以正常運行
+```
+
+### 範例 3：從檢查點恢復訓練
+
+```bash
+# 如果訓練中斷，可以從檢查點恢復
+python fine_tuning_llm_ipynb.py \
+    --load_dir ./checkpoints \
+    --ckpt_id step100 \
+    --save_dir ./checkpoints
+```
+
+### 範例 4：互動式推理
+
+```bash
+# 啟動互動模式
+python inference.py
+
+# 互動過程：
+💬 請輸入問題: 人工智慧是[MASK]技術
+
+🔮 預測結果（Top 5）:
+  1. 新興
+  2. 先進
+  3. 現代
+  4. 創新
+  5. 智能
+
+💬 請輸入問題: qa
+❓ 問題: 哪個是最大的行星？
+📝 選項（格式：A:選項A B:選項B C:選項C D:選項D）
+選項: A:地球 B:木星 C:火星 D:水星
+
+🎯 預測結果（按可能性排序）:
+  1. B: 木星 (分數: 8.5234)
+  2. A: 地球 (分數: 2.3456)
+  3. C: 火星 (分數: 1.1234)
+
+💬 請輸入問題: quit
+👋 再見！
+```
+
+### 範例 5：單次推理（腳本模式）
+
+```bash
+# 直接提供問題，執行一次推理
+python inference.py --prompt "今天天氣很[MASK]"
+
+# 輸出：
+# 問題: 今天天氣很[MASK]
+# 
+# 預測結果（Top 5）:
+#   1. 好
+#   2. 熱
+#   3. 冷
+#   4. 晴朗
+#   5. 陰
+```
+
+### 範例 6：在 Python 程式碼中使用
+
+```python
+# 方法 1：使用 inference.py 的函數
+from inference import load_model, predict_mask, qa_inference
+import torch
+
+# 載入模型
+model, tokenizer, device = load_model("./my_bert_finetuned_model_hf_format")
+
+# 填空預測
+predictions = predict_mask(
+    model, 
+    tokenizer, 
+    "人工智慧是[MASK]技術", 
+    device, 
+    top_k=5
+)
+print("預測結果:", predictions)
+# 輸出: ['新興', '先進', '現代', '創新', '智能']
+
+# 問答推理
+options = {
+    "A": "地球",
+    "B": "木星", 
+    "C": "火星",
+    "D": "水星"
+}
+results = qa_inference(
+    model,
+    tokenizer,
+    "最大的行星是？",
+    options,
+    device,
+    top_k=3
+)
+print("問答結果:", results)
+# 輸出: [('B', '木星', 8.5234), ('A', '地球', 2.3456), ...]
+```
+
+```python
+# 方法 2：直接使用 Transformers
+from transformers import AutoTokenizer, AutoModelForMaskedLM
+import torch
+
+# 載入模型
+model_path = "./my_bert_finetuned_model_hf_format"
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+model = AutoModelForMaskedLM.from_pretrained(model_path)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+model.eval()
+
+# 填空預測
+prompt = "今天天氣很[MASK]"
+inputs = tokenizer(prompt, return_tensors="pt").to(device)
+mask_token_index = (inputs.input_ids == tokenizer.mask_token_id)[0].nonzero(as_tuple=True)[0]
+
+with torch.no_grad():
+    outputs = model(**inputs)
+    logits = outputs.logits
+    mask_token_logits = logits[0, mask_token_index[0], :]
+    top_k_ids = torch.topk(mask_token_logits, 5, dim=0).indices.tolist()
+    predictions = [tokenizer.decode([idx]).strip() for idx in top_k_ids]
+
+print("預測結果:", predictions)
+# 輸出: ['好', '熱', '冷', '晴朗', '陰']
+```
+
+### 範例 7：批量處理問題
+
+```python
+from inference import load_model, predict_mask
+
+# 載入模型（只需載入一次）
+model, tokenizer, device = load_model("./my_bert_finetuned_model_hf_format")
+
+# 批量處理多個問題
+questions = [
+    "人工智慧是[MASK]技術",
+    "深度學習是[MASK]的分支",
+    "自然語言處理是[MASK]領域"
+]
+
+results = {}
+for q in questions:
+    predictions = predict_mask(model, tokenizer, q, device, top_k=3)
+    results[q] = predictions[0]  # 取最可能的答案
+
+print("批量處理結果:")
+for question, answer in results.items():
+    print(f"{question} → {answer}")
+```
+
+### 範例 8：使用 DeepSpeed 訓練
+
+```bash
+# 單 GPU 訓練
+deepspeed fine_tuning_llm_ipynb.py
+
+# 多 GPU 訓練（4 個 GPU）
+deepspeed --num_gpus=4 fine_tuning_llm_ipynb.py
+
+# 使用自訂配置檔案
+deepspeed --deepspeed_config my_ds_config.json fine_tuning_llm_ipynb.py
+```
+
+### 範例 9：調整訓練參數
+
+```python
+# 在 fine_tuning_llm_ipynb.py 中修改 config_params
+config_params = {
+    "train_batch_size": 16,  # 減小批次大小（如果記憶體不足）
+    "gradient_accumulation_steps": 2,  # 增加梯度累積
+    "optimizer": {
+        "type": "Adam",
+        "params": {
+            "lr": 5e-5,  # 調整學習率
+            "betas": [0.9, 0.999],
+            "eps": 1e-9,
+            "weight_decay": 3e-7
+        }
+    },
+    "zero_optimization": {
+        "stage": 2  # 使用 ZeRO Stage 2（節省記憶體）
+    },
+    "fp16": {
+        "enabled": True  # 啟用混合精度訓練
+    }
+}
+
+# 修改訓練輪數
+num_epochs = 20  # 減少訓練輪數
+```
+
+### 範例 10：評估模型效果
+
+```python
+from inference import load_model, qa_inference
+
+# 載入模型
+model, tokenizer, device = load_model("./my_bert_finetuned_model_hf_format")
+
+# 測試問題集
+test_questions = [
+    {
+        "question": "最大的行星是？",
+        "options": {"A": "地球", "B": "木星", "C": "火星"},
+        "correct": "B"
+    },
+    {
+        "question": "Python 是哪種語言？",
+        "options": {"A": "編譯型", "B": "解釋型", "C": "機器語言"},
+        "correct": "B"
+    }
+]
+
+# 評估準確率
+correct = 0
+total = len(test_questions)
+
+for item in test_questions:
+    results = qa_inference(
+        model, tokenizer, 
+        item["question"], 
+        item["options"], 
+        device
+    )
+    predicted = results[0][0]  # 最可能的答案
+    if predicted == item["correct"]:
+        correct += 1
+    print(f"問題: {item['question']}")
+    print(f"預測: {predicted}, 正確: {item['correct']}")
+
+accuracy = correct / total * 100
+print(f"\n準確率: {accuracy:.2f}%")
+```
+
+### 範例 11：處理不同格式的輸入
+
+```python
+from inference import load_model, predict_mask
+
+model, tokenizer, device = load_model("./my_bert_finetuned_model_hf_format")
+
+# 情況 1：輸入已經包含 [MASK]
+result1 = predict_mask(model, tokenizer, "今天[MASK]很好", device)
+print("結果 1:", result1)
+
+# 情況 2：輸入不包含 [MASK]（會自動添加）
+result2 = predict_mask(model, tokenizer, "今天天氣很好", device)
+print("結果 2:", result2)  # 會在末尾添加 [MASK]
+
+# 情況 3：多個 [MASK]（只會預測第一個）
+result3 = predict_mask(model, tokenizer, "[MASK]天氣很[MASK]", device)
+print("結果 3:", result3)  # 只預測第一個 [MASK]
+```
+
+### 範例 12：保存推理結果
+
+```python
+from inference import load_model, predict_mask
+import json
+
+model, tokenizer, device = load_model("./my_bert_finetuned_model_hf_format")
+
+# 準備問題列表
+questions = [
+    "人工智慧是[MASK]技術",
+    "深度學習是[MASK]的分支",
+    "機器學習是[MASK]的應用"
+]
+
+# 批量推理
+results = []
+for q in questions:
+    predictions = predict_mask(model, tokenizer, q, device, top_k=3)
+    results.append({
+        "question": q,
+        "predictions": predictions,
+        "best_answer": predictions[0]
+    })
+
+# 保存結果
+with open("inference_results.json", "w", encoding="utf-8") as f:
+    json.dump(results, f, ensure_ascii=False, indent=2)
+
+print("結果已保存到 inference_results.json")
+```
 
 ---
 
