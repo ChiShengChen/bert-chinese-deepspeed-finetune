@@ -19,7 +19,8 @@ This project implements fine-tuning of BERT Chinese model using DeepSpeed framew
 - 📦 **Checkpoint Management**: Supports saving and loading training checkpoints
 - 📊 **Visualization**: Automatically generates training loss curve
 - 🔧 **Device Adaptive**: Automatically detects and uses GPU/CPU
-- 📝 **Complete Evaluation**: Includes model evaluation and comparison functions
+- 📝 **Complete Evaluation**: Includes model evaluation and comparison functions (using Qwen as judge)
+- 🗂️ **Smart Path Management**: All paths use absolute paths based on script location, works from any directory
 - ⚠️ **Important Note**: BERT is a Masked Language Model, not suitable for generative chat, but suitable for fill-in-the-blank and multiple-choice Q&A tasks
 
 ## 🛠️ Requirements
@@ -97,8 +98,9 @@ python fine_tuning_llm_ipynb.py
 # Force CPU usage
 python fine_tuning_llm_ipynb.py --cpu
 
-# Specify checkpoint save path
-python fine_tuning_llm_ipynb.py --save_dir ./my_checkpoints
+# Checkpoints are automatically saved to ./checkpoints/ (relative to script)
+# To specify custom checkpoint path:
+python fine_tuning_llm_ipynb.py --save_dir /path/to/checkpoints
 
 # Resume training from checkpoint
 python fine_tuning_llm_ipynb.py --load_dir ./checkpoints --ckpt_id step100
@@ -128,8 +130,11 @@ python inference.py
 # Single inference
 python inference.py --prompt "今天天氣[MASK]"
 
-# Specify model path
-python inference.py --model_path ./my_bert_finetuned_model_hf_format
+# Uses default model path (script directory) if not specified
+python inference.py
+
+# Specify custom model path
+python inference.py --model_path /path/to/your/model
 
 # Force CPU
 python inference.py --cpu
@@ -153,8 +158,13 @@ LLM_example/
 ├── my_bert_finetuned_model_hf_format/  # Fine-tuned model (generated after training)
 ├── test_qa_data.json            # Test data JSON file (auto-generated)
 ├── validation_loss_curve.png   # Validation loss curve (auto-generated)
-└── README.md                    # This file
+├── README.md                    # This file (English)
+├── README_zh_TW.md              # README in Traditional Chinese
+├── QWEN_EVALUATION_GUIDE.md    # Guide for Qwen evaluation method
+└── .gitignore                  # Git ignore rules
 ```
+
+**Note:** All paths in the code use absolute paths based on the script file location, ensuring files can be found regardless of the current working directory.
 
 ## ⚙️ Configuration
 
@@ -230,10 +240,15 @@ Model checkpoints saved during training, can be used to resume training.
 - For true chat functionality, use **GPT-style generative models** (GPT-2, ChatGLM, Qwen, etc.)
 
 ### 3. Test Data (`test_qa_data.json`)
-Structured Q&A data extracted from test set.
+Structured Q&A data extracted from test set. Automatically saved to the project directory after data preparation.
 
 ### 4. Loss Curve (`validation_loss_curve.png`)
-Visualization chart of validation loss during training.
+Visualization chart of validation loss during training. Automatically saved to the project directory after training completes.
+
+**Path Management:**
+- All output files are saved relative to the script file location
+- No need to worry about current working directory
+- Files are always saved in the project directory
 
 ## 💾 Model Saving and Usage
 
@@ -254,11 +269,22 @@ Visualization chart of validation loss during training.
 **✅ Loading Method:**
 ```python
 from transformers import AutoTokenizer, AutoModelForMaskedLM
+import os
 
-# Load saved model
-model_path = "./my_bert_finetuned_model_hf_format"
+# Load saved model (using absolute path based on script location)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+model_path = os.path.join(script_dir, "my_bert_finetuned_model_hf_format")
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForMaskedLM.from_pretrained(model_path)
+```
+
+**Or use the inference script:**
+```bash
+# Uses default path automatically (script directory)
+python inference.py
+
+# Or specify custom path
+python inference.py --model_path /path/to/your/model
 ```
 
 ### ⚠️ BERT Model Limitations
@@ -380,12 +406,31 @@ A:
 3. Enable ZeRO optimization
 4. Use CPU training (add `--cpu` parameter)
 
+### Q: Can't find model or output files?
+A: All paths are now based on the script file location, not the current working directory. You can run the script from any directory:
+```bash
+# Works from any directory
+cd /any/path
+python /path/to/LLM_example/fine_tuning_llm_ipynb.py
+# Files will be saved to /path/to/LLM_example/
+```
+
+### Q: How does the evaluation work?
+A: The project uses **LLM-as-a-Judge** method with Qwen model. See `QWEN_EVALUATION_GUIDE.md` for detailed explanation.
+
 ## 📚 References
 
 - [DeepSpeed Official Documentation](https://www.deepspeed.ai/)
 - [Transformers Documentation](https://huggingface.co/docs/transformers)
 - [TMMLU+ Dataset](https://huggingface.co/datasets/ikala/tmmluplus)
 - [BERT Chinese Model](https://huggingface.co/bert-base-chinese)
+- [Qwen Model](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct)
+- [LLM-as-a-Judge Paper](https://arxiv.org/abs/2306.05685)
+
+## 📖 Additional Documentation
+
+- **QWEN_EVALUATION_GUIDE.md**: Detailed guide on how Qwen model evaluates answer quality
+- **README_zh_TW.md**: Traditional Chinese version of this README
 
 ## ⚠️ Notes
 
