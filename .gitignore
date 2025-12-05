@@ -70,7 +70,7 @@ data/
 *.tsv
 # *.json
 !requirements.txt
-test_qa_data.json
+# test_qa_data.json
 
 # Training outputs
 # validation_loss_curve.png
