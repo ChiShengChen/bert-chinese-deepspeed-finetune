@@ -193,8 +193,8 @@ def main():
     parser.add_argument(
         "--model_path",
         type=str,
-        default="./my_bert_finetuned_model_hf_format",
-        help="模型路徑（預設: ./my_bert_finetuned_model_hf_format）"
+        default=None,  # None 時使用腳本目錄下的默認路徑
+        help="模型路徑（預設: 腳本目錄下的 my_bert_finetuned_model_hf_format）"
     )
     parser.add_argument(
         "--cpu",
@@ -221,6 +221,10 @@ def main():
         device = torch.device("cpu")
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # 設置默認模型路徑（如果未指定）
+    if args.model_path is None:
+        args.model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "my_bert_finetuned_model_hf_format")
     
     # 載入模型
     try:

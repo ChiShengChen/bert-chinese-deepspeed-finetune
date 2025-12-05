@@ -236,11 +236,12 @@ for item in test_data:
         "answer": correct_answer
     })
 
-# 輸出成 JSON
-with open("./test_qa_data.json", "w", encoding="utf-8") as f:
+# 輸出成 JSON（保存到專案目錄）
+test_qa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_qa_data.json")
+with open(test_qa_path, "w", encoding="utf-8") as f:
     json.dump(result, f, ensure_ascii=False, indent=4)
 
-print("✅ 已輸出 test_qa_data.json")
+print(f"✅ 已輸出 test_qa_data.json 至 {test_qa_path}")
 
 print(len(val_loader))
 print(len(train_loader))
@@ -378,8 +379,10 @@ plt.title("Validation Loss Curve")
 plt.legend()
 plt.grid(True)
 # 保存圖片而不是顯示（本地環境可能沒有顯示器）
-plt.savefig("./validation_loss_curve.png", dpi=150, bbox_inches='tight')
-print("✅ 驗證損失曲線已保存至 ./validation_loss_curve.png")
+# 保存到專案目錄
+loss_curve_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "validation_loss_curve.png")
+plt.savefig(loss_curve_path, dpi=150, bbox_inches='tight')
+print(f"✅ 驗證損失曲線已保存至 {loss_curve_path}")
 # 如果環境支持顯示，可以取消註釋下面這行
 # plt.show()
 plt.close()
