@@ -457,7 +457,8 @@ import torch
 
 def chat_with_tuning_llm(prompt, max_length=1000):
     # Adjust this path if your fine-tuned model is saved elsewhere
-    model_path = "./my_bert_finetuned_model_hf_format"
+    # 使用與保存時相同的路徑邏輯
+    model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "my_bert_finetuned_model_hf_format")
     # Check if CUDA is available and set the device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -490,7 +491,8 @@ def chat_with_tuning_llm(prompt, top_k=200):
         list: _description_
     """
     try:
-        model_path = "./my_bert_finetuned_model_hf_format"
+        # 使用與保存時相同的路徑邏輯
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "my_bert_finetuned_model_hf_format")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         tokenizer = AutoTokenizer.from_pretrained(model_path)
         model = AutoModelForMaskedLM.from_pretrained(model_path).to(device)
